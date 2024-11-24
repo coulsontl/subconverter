@@ -1,6 +1,6 @@
 import configparser, shutil, glob, os, random, string
 import stat, logging, argparse
-from git import InvalidGitRepositoryError, repo as GitRepo
+from git import InvalidGitRepositoryError, repo as GitRepo, GitCommandError
 
 def del_rw(action, name, exc):
     os.chmod(name, stat.S_IWRITE)
@@ -42,8 +42,12 @@ for section in config.sections():
         logging.info("repo {} not exist, cloning...".format(repo_path))
         shutil.rmtree(repo_path, ignore_errors=True)
         os.makedirs(repo_path, exist_ok=True)
-        r = GitRepo.Repo.clone_from(url, repo_path)
-        r.git.checkout(commit)
+        try:
+            r = GitRepo.Repo.clone_from(url, repo_path)
+            r.git.checkout(commit)
+        except GitCommandError as e:
+            logging.error("Failed to clone repository from {}: {}".format(url, e))
+            continue
 
     os.makedirs(save_path, exist_ok=True)
 
