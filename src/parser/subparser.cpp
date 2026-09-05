@@ -325,6 +325,8 @@ void anytlsConstruct(
         node.IdleSessionCheckInterval = to_int(idle_session_check_interval);
         node.IdleSessionTimeout = to_int(idle_session_timeout);
         node.MinIdleSession = to_int(min_idle_session);
+        // anytls carries UDP over TCP, so enable it unless overridden (same as mihomo link converter)
+        node.UDP.define(true);
 }
 
 void vlessConstruct(
@@ -2103,7 +2105,10 @@ void explodeStdAnyTLS(std::string anytls, Proxy &node) {
     }
 
     // 其他参数
-    sni = getUrlArg(addition, "peer");
+    // the URI scheme defines "sni", some generators use "peer" like trojan links
+    sni = getUrlArg(addition, "sni");
+    if (sni.empty())
+        sni = getUrlArg(addition, "peer");
     alpn = getUrlArg(addition, "alpn");
     fingerprint = urlDecode(getUrlArg(addition, "hpkp"));
     tfo = tribool(getUrlArg(addition, "tfo"));

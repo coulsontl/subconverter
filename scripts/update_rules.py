@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 import stat
-from git import InvalidGitRepositoryError, Repo
+from git import InvalidGitRepositoryError, GitCommandError, Repo
 
 
 def del_rw(action, name: str, exc):
@@ -67,7 +67,11 @@ def main():
         r = open_repo(repo_path)
         if r is None:
             logging.info(f"cloning repo {url} to {repo_path}")
-            r = Repo.clone_from(url, repo_path)
+            try:
+                r = Repo.clone_from(url, repo_path)
+            except GitCommandError as e:
+                logging.error(f"failed to clone repository from {url}: {e}")
+                continue
         else:
             logging.info(f"repo {repo_path} exists")
             
