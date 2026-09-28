@@ -2152,7 +2152,7 @@ void explodeAnyTLS(std::string anytls, Proxy &node) {
 }
 
 void explodeStdVLESS(std::string vless, Proxy &node) {
-    std::string add, port, uuid, sni, alpn, net, type, mode, host, path, fingerprint, remarks, addition, flow, xtls, public_key, short_id, security, tls;
+    std::string add, port, uuid, sni, alpn, net, type, mode, host, path, fingerprint, client_fingerprint, remarks, addition, flow, xtls, public_key, short_id, security, tls;
     tribool tfo, scv;
     std::string decoded, userinfo, hostinfo;
     string_array user_parts;
@@ -2209,11 +2209,13 @@ void explodeStdVLESS(std::string vless, Proxy &node) {
         }
         net = getUrlArg(addition,"type");
         alpn = getUrlArg(addition, "alpn");
-        // "fp" is the parameter Xray/v2rayN actually emit for the uTLS fingerprint;
-        // "hpkp" is a legacy spelling. Prefer the standard one, fall back for old links.
-        fingerprint = getUrlArg(addition, "fp");
-        if (fingerprint.empty())
-            fingerprint = getUrlArg(addition, "hpkp");
+        // "fp" is the uTLS fingerprint that Xray/v2rayN emit (mihomo: client-fingerprint).
+        // "hpkp" is a legacy spelling of the same thing. Never map this to "fingerprint":
+        // in Clash that key is a *certificate* pin, and a bogus pin (e.g. "safari") makes
+        // every REALITY handshake fail.
+        client_fingerprint = getUrlArg(addition, "fp");
+        if (client_fingerprint.empty())
+            client_fingerprint = getUrlArg(addition, "hpkp");
         flow = getUrlArg(addition, "flow");
         xtls = getUrlArg(addition, "xtls");
         public_key = getUrlArg(addition, "pbk");
@@ -2265,7 +2267,7 @@ void explodeStdVLESS(std::string vless, Proxy &node) {
     if (remarks.empty())
         remarks = add + ":" + port;
     node.TLSSecure = security == "tls" || security == "reality";
-    vlessConstruct(node, VLESS_DEFAULT_GROUP, remarks, add, port, uuid, sni, alpn, type, net, mode, host, path, fingerprint, flow, xtls, public_key, short_id, "", tribool(), tfo, scv, "");
+    vlessConstruct(node, VLESS_DEFAULT_GROUP, remarks, add, port, uuid, sni, alpn, type, net, mode, host, path, fingerprint, flow, xtls, public_key, short_id, client_fingerprint, tribool(), tfo, scv, "");
 }
 
 void explodeVLESS(std::string vless, Proxy &node) {
