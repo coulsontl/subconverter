@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <string>
 #include <map>
 
@@ -327,6 +328,45 @@ void anytlsConstruct(
         node.MinIdleSession = to_int(min_idle_session);
         // anytls carries UDP over TCP, so enable it unless overridden (same as mihomo link converter)
         node.UDP.define(true);
+}
+
+// XHTTP connection reuse (Xray "xmux", mihomo "reuse-settings") has no share-link spelling, so
+// the "reuse" argument is our own:
+//   reuse=1                          -> defaults tuned for interactive browsing
+//   reuse=max-concurrency=16-32,...  -> explicit comma separated "key=value" pairs
+// Keys are accepted camelCase (maxConcurrency) or kebab-case (max-concurrency); unknown keys are
+// dropped. Returns the normalised kebab-case list that the clash exporter writes verbatim into
+// xhttp-opts.reuse-settings, or "" when reuse was not requested.
+std::string normalizeXHTTPReuse(const std::string &raw) {
+    std::string value = trim(raw);
+    if (value.empty())
+        return "";
+    if (value == "1" || value == "true")
+        value = "max-concurrency=16-32,max-connections=1-2,h-max-request-times=600-900,h-max-reusable-secs=1800-3000";
+    static const std::string known_keys[] = {"max-concurrency", "max-connections", "c-max-reuse-times",
+                                             "h-max-request-times", "h-max-reusable-secs", "h-keep-alive-period"};
+    string_pair_array pairs;
+    parseCommaKeyValue(value, ",", pairs);
+    std::string result;
+    for (const auto &pair : pairs) {
+        std::string key = toLower(trim(pair.first)), normalised;
+        key.erase(std::remove(key.begin(), key.end(), '-'), key.end());
+        for (const std::string &known : known_keys) {
+            std::string squashed = known;
+            squashed.erase(std::remove(squashed.begin(), squashed.end(), '-'), squashed.end());
+            if (key == squashed) {
+                normalised = known;
+                break;
+            }
+        }
+        std::string val = trim(pair.second);
+        if (normalised.empty() || val.empty())
+            continue;   // unknown key or "key" without "=value"
+        if (!result.empty())
+            result += ",";
+        result += normalised + "=" + val;
+    }
+    return result;
 }
 
 void vlessConstruct(
@@ -1364,6 +1404,7 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
             break;
         case "vless"_hash: {
             group = VLESS_DEFAULT_GROUP;
+            std::string reuse;   // xhttp-opts.reuse-settings, serialised for normalizeXHTTPReuse()
             singleproxy["uuid"] >>= uuid;
             singleproxy["servername"] >>= sni;
             net = singleproxy["network"].IsDefined() ? safe_as<std::string>(singleproxy["network"]) : "tcp";
@@ -1422,6 +1463,15 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
                         host = safe_as<std::string>(singleproxy["xhttp-opts"]["host"]);
                     if (singleproxy["xhttp-opts"]["mode"].IsDefined())
                         mode = safe_as<std::string>(singleproxy["xhttp-opts"]["mode"]);
+                    if (singleproxy["xhttp-opts"]["reuse-settings"].IsMap())
+                    {
+                        for (const auto &kv : singleproxy["xhttp-opts"]["reuse-settings"])
+                        {
+                            if (!reuse.empty())
+                                reuse += ",";
+                            reuse += safe_as<std::string>(kv.first) + "=" + safe_as<std::string>(kv.second);
+                        }
+                    }
                     break;
                 default:
                     singleproxy["host"] >>= host;
@@ -1431,6 +1481,7 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
             tls = safe_as<std::string>(singleproxy["tls"]) == "true" ? "tls" : "";
 
             vlessConstruct(node, group, ps, server, port, uuid, sni, alpn, type, net, mode, host, path, fingerprint, flow, xtls, public_key, short_id, client_fingerprint, udp, tfo, scv, underlying_proxy);
+            node.XHTTPReuse = normalizeXHTTPReuse(reuse);
             node.TLSSecure = tls == "tls";
             // Assign new parameters to node for VLESS
             node.IpVersion = ip_version;
@@ -2152,7 +2203,7 @@ void explodeAnyTLS(std::string anytls, Proxy &node) {
 }
 
 void explodeStdVLESS(std::string vless, Proxy &node) {
-    std::string add, port, uuid, sni, alpn, net, type, mode, host, path, fingerprint, client_fingerprint, remarks, addition, flow, xtls, public_key, short_id, security, tls;
+    std::string add, port, uuid, sni, alpn, net, type, mode, host, path, fingerprint, client_fingerprint, remarks, addition, flow, reuse, xtls, public_key, short_id, security, tls;
     tribool tfo, scv;
     std::string decoded, userinfo, hostinfo;
     string_array user_parts;
@@ -2217,6 +2268,7 @@ void explodeStdVLESS(std::string vless, Proxy &node) {
         if (client_fingerprint.empty())
             client_fingerprint = getUrlArg(addition, "hpkp");
         flow = getUrlArg(addition, "flow");
+        reuse = getUrlArg(addition, "reuse");
         xtls = getUrlArg(addition, "xtls");
         public_key = getUrlArg(addition, "pbk");
         security = getUrlArg(addition, "security");
@@ -2268,6 +2320,7 @@ void explodeStdVLESS(std::string vless, Proxy &node) {
         remarks = add + ":" + port;
     node.TLSSecure = security == "tls" || security == "reality";
     vlessConstruct(node, VLESS_DEFAULT_GROUP, remarks, add, port, uuid, sni, alpn, type, net, mode, host, path, fingerprint, flow, xtls, public_key, short_id, client_fingerprint, tribool(), tfo, scv, "");
+    node.XHTTPReuse = normalizeXHTTPReuse(reuse);
 }
 
 void explodeVLESS(std::string vless, Proxy &node) {

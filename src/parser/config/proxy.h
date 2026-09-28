@@ -102,6 +102,10 @@ struct Proxy
 
     // XHTTP (formerly SplitHTTP) transport options: mode = auto / packet-up / stream-up / stream-one
     String XHTTPMode;
+    // XHTTP connection reuse (Xray calls it "xmux", mihomo "reuse-settings"). Normalised
+    // "key=value,key=value" list emitted as xhttp-opts.reuse-settings for clash.meta/mihomo.
+    // Empty means no reuse: every proxied connection then pays a full TCP+TLS handshake.
+    String XHTTPReuse;
 
     tribool UDP;
     tribool TCPFastOpen;

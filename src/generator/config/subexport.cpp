@@ -690,6 +690,16 @@ void proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGr
                         singleproxy["xhttp-opts"]["host"] = x.Host;
                     if(!x.XHTTPMode.empty())
                         singleproxy["xhttp-opts"]["mode"] = x.XHTTPMode;
+                    if(!x.XHTTPReuse.empty())
+                    {
+                        // mihomo only: reuse the HTTP session across proxied connections
+                        // (Xray calls this xmux). Without it every connection redoes the
+                        // REALITY handshake, which dominates latency on a lossy path.
+                        string_pair_array reuse_pairs;
+                        parseCommaKeyValue(x.XHTTPReuse, ",", reuse_pairs);
+                        for(const auto &pair : reuse_pairs)
+                            singleproxy["xhttp-opts"]["reuse-settings"][pair.first] = pair.second;
+                    }
                     break;
                 default:
                     break;
