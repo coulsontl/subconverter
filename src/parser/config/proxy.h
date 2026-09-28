@@ -100,6 +100,9 @@ struct Proxy
     String GRPCServiceName;
     String GRPCMode;
 
+    // XHTTP (formerly SplitHTTP) transport options: mode = auto / packet-up / stream-up / stream-one
+    String XHTTPMode;
+
     tribool UDP;
     tribool TCPFastOpen;
     tribool AllowInsecure;

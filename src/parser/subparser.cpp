@@ -357,7 +357,9 @@ void vlessConstruct(
     commonConstruct(node, ProxyType::VLESS, group, remarks, server, port, udp, tfo, scv, tribool(), underlying_proxy);
     node.UUID = uuid;
     node.SNI = sni;
-    node.TransferProtocol = net.empty() ? "tcp" : net;
+    // "splithttp" is the deprecated name of the XHTTP transport; normalise it so that
+    // downstream targets (mihomo/clash.meta only understands "xhttp") stay compatible.
+    node.TransferProtocol = net.empty() ? "tcp" : (net == "splithttp" ? "xhttp" : net);
     switch(hash_(net))
     {
         case "grpc"_hash:
@@ -370,6 +372,15 @@ void vlessConstruct(
             node.QUICSecure = host;
             if (!path.empty())
                 node.QUICSecret = trim(path);
+            break;
+        case "xhttp"_hash:
+        case "splithttp"_hash:
+            if (!host.empty())
+                node.Host = trim(host);
+            if (!path.empty())
+                node.Path = urlDecode(trim(path));
+            if (!mode.empty())
+                node.XHTTPMode = trim(mode);
             break;
         default:
             if (!host.empty())
@@ -1403,6 +1414,15 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
                     singleproxy["quic-opts"]["security"] >>= host;
                     singleproxy["quic-opts"]["key"] >>= path;
                     break;
+                case "xhttp"_hash:
+                case "splithttp"_hash:
+                    if (singleproxy["xhttp-opts"]["path"].IsDefined())
+                        path = safe_as<std::string>(singleproxy["xhttp-opts"]["path"]);
+                    if (singleproxy["xhttp-opts"]["host"].IsDefined())
+                        host = safe_as<std::string>(singleproxy["xhttp-opts"]["host"]);
+                    if (singleproxy["xhttp-opts"]["mode"].IsDefined())
+                        mode = safe_as<std::string>(singleproxy["xhttp-opts"]["mode"]);
+                    break;
                 default:
                     singleproxy["host"] >>= host;
                     singleproxy["path"] >>= path;
@@ -2189,7 +2209,11 @@ void explodeStdVLESS(std::string vless, Proxy &node) {
         }
         net = getUrlArg(addition,"type");
         alpn = getUrlArg(addition, "alpn");
-        fingerprint = getUrlArg(addition, "hpkp");
+        // "fp" is the parameter Xray/v2rayN actually emit for the uTLS fingerprint;
+        // "hpkp" is a legacy spelling. Prefer the standard one, fall back for old links.
+        fingerprint = getUrlArg(addition, "fp");
+        if (fingerprint.empty())
+            fingerprint = getUrlArg(addition, "hpkp");
         flow = getUrlArg(addition, "flow");
         xtls = getUrlArg(addition, "xtls");
         public_key = getUrlArg(addition, "pbk");
@@ -2219,6 +2243,13 @@ void explodeStdVLESS(std::string vless, Proxy &node) {
                 type = getUrlArg(addition, "headerType");
                 host = getUrlArg(addition, strFind(addition,"sni") ? "sni" : "quicSecurity");
                 path = getUrlArg(addition, "key");
+                break;
+            case "xhttp"_hash:
+            case "splithttp"_hash:
+                // XHTTP: path/mode are the transport settings, host is an optional HTTP Host
+                host = getUrlArg(addition, "host");
+                path = getUrlArg(addition, "path");
+                mode = getUrlArg(addition, "mode");
                 break;
             default:
                 return;
