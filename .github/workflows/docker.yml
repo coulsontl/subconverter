@@ -1,11 +1,14 @@
 name: Publish Docker Image
-on: 
+permissions:
+  contents: read
+on:
   push:
     branches: [ master ]
     tags:
       - '**'
+  workflow_dispatch:
 
-concurrency: 
+concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
@@ -14,28 +17,25 @@ env:
 
 jobs:
   build:
+    # Each architecture is built on its own *native* runner instead of cross-building every
+    # platform on ubuntu-latest under QEMU: the per-platform images are pushed by digest in
+    # parallel and merged into one manifest list by the `merge` job below. Emulated arm64
+    # used to dominate the whole run (~27 of ~30 minutes); native arm64 takes a few minutes.
     strategy:
       matrix:
         include:
           - platform: linux/amd64
             os: ubuntu-latest
-          - platform: linux/386
-            os: ubuntu-latest
-          - platform: linux/ppc64le
-            os: ubuntu-latest
-          - platform: linux/arm/v7
-            os: ubuntu-latest
           - platform: linux/arm64
-            os: ubuntu-latest
-            # os: [self-hosted, linux, ARM64]
+            os: ubuntu-24.04-arm
     runs-on: ${{ matrix.os }}
     name: Build ${{ matrix.platform }} Image
     steps:
       - name: Prepare
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV    
-               
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
       - name: Checkout base
         uses: actions/checkout@v4
         with:
@@ -125,8 +125,7 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)      
-    
+            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
       - name: Inspect image
-        run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+        run: docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
