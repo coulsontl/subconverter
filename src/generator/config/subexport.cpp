@@ -279,7 +279,10 @@ void proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGr
         scv.define(x.AllowInsecure);
 
         singleproxy["name"] = x.Remark;
-        singleproxy["server"] = x.Hostname;
+        // Clash/mihomo wants bare IPv6 addresses; a bracketed "[2603:...]" fails at dial time
+        // with "missing port in address". Parsers normally strip the brackets, keep this as a
+        // safety net for nodes built by other paths (clash input files, provider imports).
+        singleproxy["server"] = stripIPv6Brackets(x.Hostname);
         singleproxy["port"] = x.Port;
 
         if (!x.UnderlyingProxy.empty())

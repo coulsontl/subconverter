@@ -57,6 +57,15 @@ bool isIPv6(const std::string &address)
     return false;
 }
 
+std::string stripIPv6Brackets(const std::string &address)
+{
+    // URIs bracket IPv6 literals ("[2603:c024::1]") per RFC 3986; Clash/mihomo wants the bare
+    // address in the "server" field, otherwise dialing fails with "missing port in address".
+    if(address.size() >= 2 && address.front() == '[' && address.back() == ']')
+        return address.substr(1, address.size() - 2);
+    return address;
+}
+
 void urlParse(std::string &url, std::string &host, std::string &path, int &port, bool &isTLS)
 {
     std::vector<std::string> args;

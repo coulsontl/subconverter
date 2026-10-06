@@ -2251,6 +2251,13 @@ void explodeStdVLESS(std::string vless, Proxy &node) {
         }
     }
 
+    // IPv6 literals in URIs are bracketed per RFC 3986 (e.g. "[2603:c024::1]:443"), but
+    // Clash/mihomo expects the bare address in the "server" field ("[2603:...]" makes the
+    // dialer fail with "missing port in address"). Strip the brackets at the parse stage so
+    // every output format (clash/surge/json/...) gets the bare address.
+    if (add.size() >= 2 && add.front() == '[' && add.back() == ']')
+        add = add.substr(1, add.size() - 2);
+
     if (uuid.empty()) return;
 
     if (!addition.empty()) {
